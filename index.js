@@ -3,6 +3,8 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const { MongoClient, ServerApiVersion } = require('mongodb');
+const nodemailer = require('nodemailer');
+const mandrillTransport = require('nodemailer-mandrill-transport');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -29,7 +31,128 @@ function verifyJWT(req, res, next) {
     next();
   });
 }
+// var transport = nodemailer.createTransport(mandrillTransport({
+//   auth: {
+//     api_key: process.env.EMAIL_SENDER_KEY
+//   }
+// }));
 
+var transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_SENDER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+function sendAppointmentEmail(booking){
+  const {patient, patientName, treatment, date, slot} = booking;
+  var mailOptions = {
+    from:  process.env.EMAIL_SENDER,
+    to: patient,
+    subject: `Your Appointment for ${treatment} is on ${date} at ${slot} is Confirmed`,
+    text: `Your Appointment for ${treatment} is on ${date} at ${slot} is Confirmed`,
+    html:`
+    <div>
+      <p> Hello ${patientName}, </p>
+      <h3>Your Appointment for ${treatment} is confirmed</h3>
+      <p>Looking forward to seeing you on ${date} at ${slot}.</p>
+      
+      <h3>Our Address</h3>
+      <p>Andor Killa Bandorban</p>
+      <p>Bangladesh</p>
+      <a href="https://web.programming-hero.com/">unsubscribe</a>
+    </div>
+  `       
+  };
+  
+  transporter.sendMail(mailOptions, function(error, info){
+    if (error) {
+      console.log(error);
+    } else {
+      console.log('Email sent: ' + info.response);
+    }
+  });
+}
+
+//   const {patient, patientName, treatment, date, slot} = booking;
+//   // var transporter = nodemailer.createTransport(`smtps://${userEmail}:${userPassword}@smtp.gmail.com`);
+
+//   // var mailOptions = {
+// //     from: userEmail,    
+// //     to: patient, 
+// //     subject: `Your Appointment for ${treatment} is on ${date} at ${slot} is Confirmed`, 
+// //     text: `Your Appointment for ${treatment} is on ${date} at ${slot} is Confirmed`,       
+// //     html:  `
+// //     <div>
+// //       <p> Hello ${patientName}, </p>
+// //       <h3>Your Appointment for ${treatment} is confirmed</h3>
+// //       <p>Looking forward to seeing you on ${date} at ${slot}.</p>
+      
+// //       <h3>Our Address</h3>
+// //       <p>Andor Killa Bandorban</p>
+// //       <p>Bangladesh</p>
+      
+// //     </div>
+// //   `
+// // };
+
+
+// // transporter.sendMail(mailOptions, function(error, info){
+// //     if(error){
+// //         return console.log(error);
+// //     }
+// //     console.log('Message sent: ' + info.response);
+// // });
+//   // transport.sendMail({
+    
+//   //   from: process.env.EMAIL_SENDER,
+//   //   to: patient,
+//   //   subject: `Your Appointment for ${treatment} is on ${date} at ${slot} is Confirmed`,
+//   //   html:  `
+//   //   <div>
+//   //     <p> Hello ${patientName}, </p>
+//   //     <h3>Your Appointment for ${treatment} is confirmed</h3>
+//   //     <p>Looking forward to seeing you on ${date} at ${slot}.</p>
+      
+//   //     <h3>Our Address</h3>
+//   //     <p>Andor Killa Bandorban</p>
+//   //     <p>Bangladesh</p>
+      
+//   //   </div>
+//   // `
+//   // }, function(err, info) {
+//   //   if (err) {
+    
+//   //     console.error(err);
+//   //   } else {
+//   //     console.log(info);
+//   //   }
+//   // });
+
+
+
+
+
+// var transport = nodemailer.createTransport(mandrillTransport({
+//   auth: {
+//     apiKey: '2437ed379423b77e134676938322ace7-us11'
+//   }
+// }));
+
+// transport.sendMail({
+//   from:  'nassirctg1234@gmail.com',
+//   to: patient,
+//   subject: 'Hello',
+//   html: '<p>How are you?</p>'
+// }, function(err, info) {
+//   if (err) {
+//     console.error(err);
+//   } else {
+//     console.log(info);
+//   }
+// })
+// }
 
 async function run() {
   try {
@@ -152,6 +275,8 @@ async function run() {
         return res.send({ success: false, booking: exists })
       }
       const result = await bookingCollection.insertOne(booking);
+      sendAppointmentEmail(booking);
+      console.log('email sent')
       return res.send({ success: true, result });
     })
 
