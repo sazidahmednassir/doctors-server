@@ -75,6 +75,39 @@ function sendAppointmentEmail(booking){
     }
 });
 }
+
+function sendPaymentConfirmationEmail(booking){
+  console.log(booking)
+  const {patient, patientName, treatment, date, slot} = booking
+
+  var email = {
+    from: process.env.EMAIL_SENDER,
+    to: patient,
+    subject:  `We have received your payment for ${treatment} is on ${date} at ${slot} is Confirmed`,
+    text: `Your payment for this Appointment ${treatment} is on ${date} at ${slot} is Confirmed`,
+    html: `
+    <div>
+    <p> Hello ${patientName}, </p>
+    <h3>Thank you for your payment . </h3>
+    <h3>We have received your payment</h3>
+    <p>Looking forward to seeing you on ${date} at ${slot}.</p>
+    <h3>Our Address</h3>
+    <p>Andor Killa Bandorban</p>
+    <p>Bangladesh</p>
+    <a href="https://web.programming-hero.com/">unsubscribe</a>
+    </div>
+  `
+  };
+
+  emailClient.sendMail(email, function(err, info){
+    if (err ){
+      console.log(err);
+    }
+    else {
+      console.log('Message sent: ' ,  info);
+    }
+});
+}
 // var transport = nodemailer.createTransport(mandrillTransport({
 //   auth: {
 //     api_key: process.env.EMAIL_SENDER_KEY
@@ -220,6 +253,7 @@ async function run() {
 
    app.post('/create-payment-intent', verifyJWT, async(req, res)=>{
     const service = req.body;
+    // console.log(service)
     const price = service.price;
     const amount = price*100;
     const paymentIntent = await stripe.paymentIntents.create({
@@ -351,6 +385,7 @@ async function run() {
     app.patch('/booking/:id', verifyJWT, async(req, res) =>{
       const id  = req.params.id;
       const payment = req.body;
+      console.log(payment)
       const filter = {_id: ObjectId(id)};
       const updatedDoc = {
         $set: {
@@ -361,6 +396,7 @@ async function run() {
 
       const result = await paymentCollection.insertOne(payment);
       const updatedBooking = await bookingCollection.updateOne(filter, updatedDoc);
+      sendPaymentConfirmationEmail(payment)
       res.send(updatedBooking);
     })
 
