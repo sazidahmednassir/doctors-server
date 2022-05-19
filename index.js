@@ -5,8 +5,10 @@ var ObjectId = require('mongodb').ObjectID;
 require('dotenv').config();
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { MongoClient, ServerApiVersion } = require('mongodb');
-const nodemailer = require('nodemailer');
-const mandrillTransport = require('nodemailer-mandrill-transport');
+// const nodemailer = require('nodemailer');
+// const mandrillTransport = require('nodemailer-mandrill-transport');
+var nodemailer = require('nodemailer');
+var sgTransport = require('nodemailer-sendgrid-transport');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -33,49 +35,89 @@ function verifyJWT(req, res, next) {
     next();
   });
 }
+
+var emailSenderOptions = {
+  auth: {
+    api_key: process.env.EMAIL_SENDER_KEY
+  }
+}
+
+const  emailClient = nodemailer.createTransport(sgTransport(emailSenderOptions));
+
+function sendAppointmentEmail(booking){
+  const {patient, patientName, treatment, date, slot} = booking;
+
+  var email = {
+    from: process.env.EMAIL_SENDER,
+    to: patient,
+    subject: `Your Appointment for ${treatment} is on ${date} at ${slot} is Confirmed`,
+    text: `Your Appointment for ${treatment} is on ${date} at ${slot} is Confirmed`,
+    html: `
+    <div>
+      <p> Hello ${patientName}, </p>
+      <h3>Thank you for your Booking . </h3>
+      <h3>Please Pay the payment through myappointments section</h3>
+      <p>Looking forward to seeing you on ${date} at ${slot}.</p>
+      <h3>Our Address</h3>
+      <p>Andor Killa Bandorban</p>
+      <p>Bangladesh</p>
+      <a href="https://web.programming-hero.com/">unsubscribe</a>
+    </div>
+  `
+  };
+
+  emailClient.sendMail(email, function(err, info){
+    if (err ){
+      console.log(err);
+    }
+    else {
+      console.log('Message sent: ' ,  info);
+    }
+});
+}
 // var transport = nodemailer.createTransport(mandrillTransport({
 //   auth: {
 //     api_key: process.env.EMAIL_SENDER_KEY
 //   }
 // }));
 
-var transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_SENDER,
-    pass: process.env.EMAIL_PASS
-  }
-});
+// var transporter = nodemailer.createTransport({
+//   service: 'gmail',
+//   auth: {
+//     user: process.env.EMAIL_SENDER,
+//     pass: process.env.EMAIL_PASS
+//   }
+// });
 
-function sendAppointmentEmail(booking){
-  const {patient, patientName, treatment, date, slot} = booking;
-  var mailOptions = {
-    from:  process.env.EMAIL_SENDER,
-    to: patient,
-    subject: `Your Appointment for ${treatment} is on ${date} at ${slot} is Confirmed`,
-    text: `Your Appointment for ${treatment} is on ${date} at ${slot} is Confirmed`,
-    html:`
-    <div>
-      <p> Hello ${patientName}, </p>
-      <h3>Your Appointment for ${treatment} is confirmed</h3>
-      <p>Looking forward to seeing you on ${date} at ${slot}.</p>
+// function sendAppointmentEmail(booking){
+//   const {patient, patientName, treatment, date, slot} = booking;
+//   var mailOptions = {
+//     from:  process.env.EMAIL_SENDER,
+//     to: patient,
+//     subject: `Your Appointment for ${treatment} is on ${date} at ${slot} is Confirmed`,
+//     text: `Your Appointment for ${treatment} is on ${date} at ${slot} is Confirmed`,
+//     html:`
+//     <div>
+//       <p> Hello ${patientName}, </p>
+//       <h3>Your Appointment for ${treatment} is confirmed</h3>
+//       <p>Looking forward to seeing you on ${date} at ${slot}.</p>
       
-      <h3>Our Address</h3>
-      <p>Andor Killa Bandorban</p>
-      <p>Bangladesh</p>
-      <a href="https://web.programming-hero.com/">unsubscribe</a>
-    </div>
-  `       
-  };
+//       <h3>Our Address</h3>
+//       <p>Andor Killa Bandorban</p>
+//       <p>Bangladesh</p>
+//       <a href="https://web.programming-hero.com/">unsubscribe</a>
+//     </div>
+//   `       
+//   };
   
-  transporter.sendMail(mailOptions, function(error, info){
-    if (error) {
-      console.log(error);
-    } else {
-      console.log('Email sent: ' + info.response);
-    }
-  });
-}
+//   transporter.sendMail(mailOptions, function(error, info){
+//     if (error) {
+//       console.log(error);
+//     } else {
+//       console.log('Email sent: ' + info.response);
+//     }
+//   });
+// }
 
 //   const {patient, patientName, treatment, date, slot} = booking;
 //   // var transporter = nodemailer.createTransport(`smtps://${userEmail}:${userPassword}@smtp.gmail.com`);
@@ -163,6 +205,7 @@ async function run() {
     const bookingCollection = client.db('doctors_portal').collection('bookings');
     const userCollection = client.db('doctors_portal').collection('users');
     const doctorCollection = client.db('doctors_portal').collection('doctors');
+    const paymentCollection = client.db('doctors_portal').collection('payments');
 
     const verifyAdmin = async (req, res, next) => {
       const requester = req.decoded.email;
@@ -302,6 +345,23 @@ async function run() {
       sendAppointmentEmail(booking);
       console.log('email sent')
       return res.send({ success: true, result });
+    })
+
+
+    app.patch('/booking/:id', verifyJWT, async(req, res) =>{
+      const id  = req.params.id;
+      const payment = req.body;
+      const filter = {_id: ObjectId(id)};
+      const updatedDoc = {
+        $set: {
+          paid: true,
+          transactionId: payment.transactionId
+        }
+      }
+
+      const result = await paymentCollection.insertOne(payment);
+      const updatedBooking = await bookingCollection.updateOne(filter, updatedDoc);
+      res.send(updatedBooking);
     })
 
 
