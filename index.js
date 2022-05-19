@@ -3,6 +3,7 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 var ObjectId = require('mongodb').ObjectID;
 require('dotenv').config();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { MongoClient, ServerApiVersion } = require('mongodb');
 const nodemailer = require('nodemailer');
 const mandrillTransport = require('nodemailer-mandrill-transport');
@@ -174,6 +175,18 @@ async function run() {
       }
     }
 
+   app.post('/create-payment-intent', verifyJWT, async(req, res)=>{
+    const service = req.body;
+    const price = service.price;
+    const amount = price*100;
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount : amount,
+      currency: 'usd',
+      payment_method_types:['card']
+    });
+    res.send({clientSecret: paymentIntent.client_secret})
+   })
+
     app.get('/service', async (req, res) => {
       const query = {};
       const cursor = serviceCollection.find(query).project({name:1});
@@ -269,9 +282,10 @@ async function run() {
     })
 
 
+
     app.get('/booking/:id', verifyJWT, async(req, res)=>{
       const id = req.params.id;
-      console.log(id);
+      // console.log(id);
       const query = {_id: ObjectId(id)};
       const booking = await bookingCollection.findOne(query);
       res.send(booking)
